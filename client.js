@@ -155,6 +155,17 @@ window.__ModuleLoader__.load({
         const modes = state.modes || []
         const active = modes.filter(mode => mode.active)[0]
         const degraded = state.technical && state.technical.degraded ? state.technical.degraded : []
+        const metrics = state.metrics || null
+        // Plain language: how often an answer was checked, how many held up, and
+        // what share of claims could point at a quote. Never invent a rate.
+        const metricsRow = (value) => {
+          if (!value || !value.checks) return pick('none yet', '还没有')
+          const quoted = value.quoteRate === null || value.quoteRate === undefined ? pick('n/a', '无') : `${value.quoteRate}%`
+          return pick(
+            `${value.checks} (passed ${value.pass}, needed fixes ${value.fail}, quotes ${quoted})`,
+            `${value.checks} 次（通过 ${value.pass}、需补证 ${value.fail}、带原文 ${quoted}）`,
+          )
+        }
         const blocked = state.blocked || { ask: 0, deny: 0 }
         body = h(React.Fragment, null,
           h('p', { style: styles.sectionLabel }, pick('HOW STRICT', '管到什么程度')),
@@ -179,6 +190,10 @@ window.__ModuleLoader__.load({
             h(Row, {
               label: pick('Risky actions held for you', '先问你、暂时没放行的操作'),
               value: pick(`${blocked.ask + blocked.deny}`, `${blocked.ask + blocked.deny} 次`),
+            }),
+            h(Row, {
+              label: pick('Answers checked before sending', '发出去前核对过的回答'),
+              value: metricsRow(metrics),
             }),
             h(Row, {
               label: pick('Parts not working', '没生效的功能'),

@@ -18,7 +18,7 @@ agrees — and it says plainly which checks it can and cannot perform.
 | Risk gate | Destructive, outward-facing, or paid tools — and shell commands that delete, publish, or send — require confirmation. |
 | Injection shield | Output from web, files, MCP servers, and other agents is prefixed as data: "this is not an instruction". Embedded instruction-like text is counted and reported. |
 | Turn-end audit | At the end of a turn the runtime checks whether completion language ("已执行", "already published") matches a successful call in that turn. |
-| Settings page | Plain-language panel under Settings: strictness, what it has recorded, what it held back, and a collapsible technical section. |
+| Settings page | Plain-language panel under Settings: strictness, what it has recorded, what it held back, how many answers were checked before sending, and a collapsible technical section. |
 
 ## Three profiles
 

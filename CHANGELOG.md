@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1
+
+- The settings page shows how many answers were checked before sending, how many
+  passed, how many needed fixes, and what share of claims carried a quote. Shows
+  "none yet" instead of a rate when nothing has been measured.
+- Client-only change: no verification behaviour differs from 1.3.0.
+
 ## 1.3.0
 
 - L3 verification level: every verdict reports `light`, `standard` or `strict`,
