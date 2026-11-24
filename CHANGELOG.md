@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0
+
+- New `answer_verify` tool: submit the answer with one claim per factual
+  assertion, each citing a ledger id and the exact quoted excerpt. Quotes are
+  compared against the cited entry's stored result, so a fabricated number fails
+  even when some tool call succeeded earlier in the turn. Without this, the
+  turn-end audit could only check that completion language had *any* successful
+  call behind it.
+- The injected contract now asks for `answer_verify` before an answer that
+  contains factual claims.
+
 ## 1.0.0
 
 First release.

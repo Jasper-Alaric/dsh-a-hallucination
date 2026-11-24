@@ -144,7 +144,9 @@ cordisTest('a real dispatch lands in the ledger and the tool reads it back', asy
 cordisTest('disposal removes the registrations', async () => {
   const { app, tools } = compose()
   await settle()
-  assert.equal(tools.size, 1)
+  assert.equal(tools.size, 2)
+  assert.ok(tools.has('ledger_view'))
+  assert.ok(tools.has('answer_verify'))
   await app.fiber.dispose()
   assert.equal(app.get('aHallucination'), undefined)
 })

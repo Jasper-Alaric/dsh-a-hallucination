@@ -285,3 +285,63 @@ test('without persistence the mode resets to the configured default', () => {
   const second = start()
   assert.equal(second.provided.get('aHallucination').mode, 'inspect')
 })
+
+test('answer_verify passes an answer whose claim quotes the ledger', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('ServerTime=08:00:12'))
+  const tool = host.tool('answer_verify')
+  const value = await tool.execute({
+    answer: '服务器时间为 08:00:12。',
+    claims: [{ claim: '服务器时间为 08:00:12', status: 'verified', evidence_id: 'E1', quote: '08:00:12' }],
+    facts: ['服务器时间为 08:00:12'],
+  }, call('answer_verify'))
+  assert.equal(value.passed, true)
+  assert.equal(value.quoted, 1)
+})
+
+test('answer_verify fails a citation that does not exist', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('body'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '结论。',
+    claims: [{ claim: '结论', status: 'verified', evidence_id: 'E9' }],
+  }, call('answer_verify'))
+  assert.equal(value.passed, false)
+  assert.ok(value.failedCodes.includes('V2'))
+})
+
+test('answer_verify fails a quote that is not in the cited result', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('ServerTime=08:00:12'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '营收 620 亿。',
+    claims: [{ claim: '营收 620 亿', status: 'verified', evidence_id: 'E1', quote: '营收 620 亿' }],
+  }, call('answer_verify'))
+  assert.equal(value.passed, false)
+  assert.ok(value.failedCodes.includes('V3'))
+})
+
+test('answer_verify fails a fact with no covering claim', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('body'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '两个说法。',
+    claims: [{ claim: '第一个说法', status: 'unknown' }],
+    facts: ['第一个说法', '第二个说法完全没有被覆盖'],
+  }, call('answer_verify'))
+  assert.ok(value.failedCodes.includes('V1'))
+})
+
+test('answer_verify reports how many claims carried a quote', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('body'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '结论。',
+    claims: [
+      { claim: '结论', status: 'unknown' },
+      { claim: '另一条', status: 'inferred' },
+    ],
+  }, call('answer_verify'))
+  assert.equal(value.quoted, 0)
+  assert.equal(value.unquoted, 2)
+})
