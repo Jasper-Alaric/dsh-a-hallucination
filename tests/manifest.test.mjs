@@ -58,6 +58,33 @@ test('the client half is declared as a web client module', () => {
   assert.ok(text.includes('settings.section'))
 })
 
+test('the client injects only the settings surface it uses', () => {
+  const manifest = JSON.parse(read('package.json'))
+  assert.deepEqual(manifest.dsh.client.inject, ['@deepseek-ai/dsh-client-ui-settings'])
+  assert.equal(read('client.js').includes('dsh-client-locale'), false)
+})
+
+test('the dev bundle patch keeps a minimal comment', () => {
+  const comments = read('cordis.patch.yml')
+    .split(/\r?\n/)
+    .filter(line => line.trimStart().startsWith('#'))
+  assert.equal(comments.length, 1)
+})
+
+test('the docs cover every supported config key and the unreleased fixes', () => {
+  const english = read('README.md')
+  const chinese = read('README.zh.md')
+  for (const key of ['traceableRoots', 'maxEvidenceAgeHours', 'contractOrder', 'maxRewrite', 'maxRetry', 'untrustedToolsReplace']) {
+    assert.ok(english.includes(`\`${key}\``), `README.md omits ${key}`)
+    assert.ok(chinese.includes(`\`${key}\``), `README.zh.md omits ${key}`)
+  }
+  const log = read('CHANGELOG.md'); assert.ok(log.includes('## Unreleased') || log.includes('## ' + JSON.parse(read('package.json')).version))
+  for (const code of ['V8', 'V9']) {
+    assert.ok(english.includes(code), `README.md omits ${code}`)
+    assert.ok(chinese.includes(code), `README.zh.md omits ${code}`)
+  }
+})
+
 test('the patch row matches the package name and plugin id', () => {
   const manifest = JSON.parse(read('package.json'))
   const patch = parsePatch()

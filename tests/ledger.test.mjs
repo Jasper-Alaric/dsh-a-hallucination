@@ -82,3 +82,33 @@ test('registry isolates sessions and drops them on demand', () => {
   assert.equal(registry.get('s1').count(), 0)
   assert.equal(registry.total(), 1)
 })
+
+// --- completion signal and full evidence text (H1, M2) ----------------------
+
+test('a silent success is ok even though its status is empty', () => {
+  const ledger = createLedger()
+  const silent = ledger.record(observation({ name: 'pwsh', contentText: '   ' }))
+  assert.equal(silent.status, 'empty')
+  assert.equal(silent.ok, true)
+  const failed = ledger.record(observation({ isError: true }))
+  assert.equal(failed.status, 'error')
+  assert.equal(failed.ok, false)
+})
+
+test('the full result is kept in memory beyond the display cap', () => {
+  const ledger = createLedger()
+  const text = `${'a'.repeat(2000)}TAIL_MARKER`
+  const entry = ledger.record(observation({ contentText: text }))
+  assert.equal(entry.content.length, 1600)
+  assert.equal(entry.full_chars, text.length)
+  assert.equal(entry.full_truncated, false)
+  assert.ok(entry.full.endsWith('TAIL_MARKER'))
+})
+
+test('a result beyond the full cap reports how much was retained', () => {
+  const ledger = createLedger()
+  const entry = ledger.record(observation({ contentText: 'x'.repeat(9000) }))
+  assert.equal(entry.full.length, 8000)
+  assert.equal(entry.full_chars, 9000)
+  assert.equal(entry.full_truncated, true)
+})

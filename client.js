@@ -26,16 +26,19 @@ window.__ModuleLoader__.load({
       return zh() ? cn : en
     }
 
-    /** Same-origin JSON request. */
+    /** Same-origin JSON request. GET never reuses a cached body. */
     async function api(path, body) {
       const options = body === undefined
-        ? { method: 'GET', headers: { accept: 'application/json' } }
+        ? { method: 'GET', headers: { accept: 'application/json' }, cache: 'no-store' }
         : {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify(body),
+          cache: 'no-store',
         }
-      const response = await fetch(`${API_BASE}${path}`, options)
+      // A unique query keeps any intermediate cache from replaying an old body.
+      const url = body === undefined ? `${API_BASE}${path}?t=${Date.now()}` : `${API_BASE}${path}`
+      const response = await fetch(url, options)
       const text = await response.text()
       let value = {}
       if (text.length > 0) {
@@ -108,10 +111,14 @@ window.__ModuleLoader__.load({
       const [state, setState] = React.useState(null)
       const [error, setError] = React.useState('')
       const [busy, setBusy] = React.useState(false)
+      // Shown next to the title: if the panel is alive this clock moves every few
+      // seconds even when every counter happens to hold still.
+      const [updatedAt, setUpdatedAt] = React.useState('')
 
       const load = React.useCallback(async () => {
         try {
           setState(await api('/state'))
+          setUpdatedAt(new Date().toLocaleTimeString())
           setError('')
         } catch (cause) {
           setError(String(cause && cause.message ? cause.message : cause))
@@ -120,12 +127,21 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         void load()
+        // Keep the counters honest while the panel is open; skip when the tab is
+        // hidden so a background tab costs nothing.
+        const id = setInterval(() => {
+          if (document.visibilityState === 'visible') void load()
+        }, 5000)
+        return () => clearInterval(id)
       }, [load])
 
       const change = React.useCallback(async (mode) => {
         setBusy(true)
         try {
-          setState(await api('/mode', { mode }))
+          await api('/mode', { mode })
+          // Re-read through the same path the timer uses, so the timestamp and
+          // every rendered field stay in one place.
+          await load()
           setError('')
         } catch (cause) {
           setError(String(cause && cause.message ? cause.message : cause))
@@ -135,7 +151,9 @@ window.__ModuleLoader__.load({
       }, [])
 
       const header = h('div', { style: styles.header },
-        h('h3', { style: styles.title }, pick('A-Hallucination · anti-fabrication', 'A-Hallucination · 反幻觉助手')),
+        h('div', null,
+          h('h3', { style: styles.title }, pick('A-Hallucination · anti-fabrication', 'A-Hallucination · 反幻觉助手')),
+          h('p', { style: styles.hint }, updatedAt.length === 0 ? '' : pick(`updated ${updatedAt}`, `更新于 ${updatedAt}`))),
         h('button', {
           style: styles.button,
           disabled: busy,

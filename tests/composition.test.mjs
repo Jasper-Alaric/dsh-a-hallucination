@@ -7,23 +7,34 @@ import * as plugin from '../index.js'
  * with only the neighbouring services stubbed. Unlike `wiring.test.mjs`, the
  * waterfall, injection, and disposal machinery here is the real one.
  *
- * The checkout path is absolute because the vendored Cordis is not installed in
- * this package's `node_modules`; on a machine without that checkout these cases
- * are skipped rather than failed.
+ * The vendored Cordis is not installed in this package's `node_modules`, so the
+ * checkout is derived from this file (or `DSH_CORDIS_URL`). When neither
+ * resolves, the import throws and the run fails loudly; silently skipping would
+ * hide a broken checkout.
  */
 
-const CHECKOUT = 'file:///E:/Deepseek%20Harness/deepseek-harness-master/deepseek-harness-master/vendor/cordis/lib/index.js'
+const CORDIS_CANDIDATES = [
+  process.env.DSH_CORDIS_URL,
+  new URL('../../../deepseek-harness-master/deepseek-harness-master/vendor/cordis/lib/index.js', import.meta.url).href,
+].filter(spec => typeof spec === 'string' && spec.length > 0)
 
 let Context
-try {
-  const cordis = await import(CHECKOUT)
-  Context = cordis.Context
-} catch {
-  Context = undefined
+let loadError
+for (const spec of CORDIS_CANDIDATES) {
+  try {
+    const cordis = await import(spec)
+    Context = cordis.Context
+    break
+  } catch (error) {
+    loadError = error
+  }
+}
+if (Context === undefined) {
+  throw new Error(`vendored Cordis could not be loaded; tried ${CORDIS_CANDIDATES.join(', ')}: ${String(loadError)}`)
 }
 
-/** A test that skips when the vendored runtime is unavailable. */
-const cordisTest = (name, fn) => test(name, Context === undefined ? { skip: 'vendored Cordis not found' } : {}, fn)
+/** A test that runs on the real runtime (the import above already failed loudly if unavailable). */
+const cordisTest = (name, fn) => test(name, fn)
 
 /** Build one composed app with stubbed tools and systemPrompt services. */
 function compose(config = {}) {
@@ -149,4 +160,20 @@ cordisTest('disposal removes the registrations', async () => {
   assert.ok(tools.has('answer_verify'))
   await app.fiber.dispose()
   assert.equal(app.get('aHallucination'), undefined)
+})
+
+cordisTest('an approval decision on the session event bus clears V8', async () => {
+  const { app, tools } = compose()
+  await settle()
+  const agent = { id: 's1' }
+  const exec = { name: 'delete', arguments: {}, callId: 'call_c', agent }
+  const decision = await app.waterfall(app, 'tools/pre-execute', exec, async () => ({ kind: 'allow' }))
+  assert.equal(decision.kind, 'ask')
+  const session = { id: 's1' }
+  await app.emit('session/event', session, { seq: 1, time: Date.now(), type: 'approval/asked', data: { id: 'r1', toolName: 'delete', callId: 'call_c' } })
+  await app.emit('session/event', session, { seq: 2, time: Date.now(), type: 'approval/decided', data: { id: 'r1', outcome: 'allowed-once' } })
+  await app.emit('tools/result', exec, { isError: false, content: [{ type: 'text', text: 'deleted' }] })
+  const value = await tools.get('answer_verify').execute({ answer: '文件已删除。', claims: [] }, { agent })
+  assert.equal(value.failedCodes.includes('V8'), false, JSON.stringify(value.failures))
+  await app.fiber.dispose()
 })

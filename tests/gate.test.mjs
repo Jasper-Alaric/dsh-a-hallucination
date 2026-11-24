@@ -176,3 +176,89 @@ test('an observation list stays bounded and totals across sessions', () => {
   registry.drop('s1')
   assert.equal(registry.total(), 1)
 })
+
+// --- attributable roots: a reloaded corpus must not lock the agent out -------
+
+const emptyCorpus = { has: () => false }
+
+test('a path under an attributable root is traceable without a citation', () => {
+  const found = untraceableParams({ path: 'E:/work/project/a.txt' }, emptyCorpus, ['path'], ['E:/work'])
+  assert.equal(found.length, 0)
+})
+
+test('a path outside every root still needs a citation', () => {
+  const found = untraceableParams({ path: 'E:/somewhere/else.txt' }, emptyCorpus, ['path'], ['E:/work'])
+  assert.equal(found.length, 1)
+})
+
+test('root matching is boundary-aware, not a prefix match', () => {
+  assert.equal(untraceableParams({ path: 'E:/workshop/x' }, emptyCorpus, ['path'], ['E:/work']).length, 1)
+  assert.equal(untraceableParams({ path: 'E:/work/x' }, emptyCorpus, ['path'], ['E:/work/']).length, 0)
+})
+
+test('without roots every uncited identifying parameter is reported', () => {
+  assert.equal(untraceableParams({ path: 'E:/work/a.txt' }, emptyCorpus, ['path'], []).length, 1)
+})
+
+test('a cited value is traceable even outside the roots', () => {
+  const cited = { has: (value) => value === 'E:/elsewhere/b.txt' }
+  assert.equal(untraceableParams({ path: 'E:/elsewhere/b.txt' }, cited, ['path'], []).length, 0)
+})
+
+// --- root normalization and short identifiers (M1, L3) ---------------------
+
+test('a .. traversal does not escape the configured root', () => {
+  assert.equal(untraceableParams({ path: 'E:/base/../Windows/x' }, emptyCorpus, ['path'], ['E:/base']).length, 1)
+})
+
+test('a forward-slash or differently-cased path still matches the root', () => {
+  assert.equal(untraceableParams({ path: 'E:/base/x' }, emptyCorpus, ['path'], ['E:\\base']).length, 0)
+  assert.equal(untraceableParams({ path: 'E:/BASE/X' }, emptyCorpus, ['path'], ['e:/base']).length, 0)
+})
+
+test('a one-character id is still an identifying value', () => {
+  const decision = decidePreTool(call('read', { id: 7 }), state('adjudicate'))
+  assert.equal(decision.kind, 'deny')
+  assert.ok(decision.reason.includes('untraceable'))
+})
+
+// --- risk matching: command forms, shell suffixes, and mail reads (M7) ------
+
+test('risk gate catches curl request forms and gh pr merge', () => {
+  const settings = resolveSettings({})
+  for (const command of ['curl --request POST https://example.test', 'curl -XPOST https://example.test', 'gh pr merge 12']) {
+    const risk = classifyRisk('terminal_exec', settings, { command })
+    assert.notEqual(risk, undefined, command)
+  }
+})
+
+test('email_search reads mail and is not treated as a sender', () => {
+  assert.equal(classifyRisk('email_search', resolveSettings({})), undefined)
+  assert.notEqual(classifyRisk('email_send', resolveSettings({})), undefined)
+})
+
+// --- mode roots and labels (H3, L1) ----------------------------------------
+
+test('default roots include DSH_HOME and explicit [] exempts nothing', () => {
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = 'E:/dsh-home-for-test'
+  try {
+    const settings = resolveSettings({})
+    assert.ok(settings.traceableRoots.includes('E:/dsh-home-for-test'))
+    assert.ok(settings.traceableRoots.length >= 1)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+  assert.deepEqual(resolveSettings({ traceableRoots: [] }).traceableRoots, [])
+  const underCwd = `${process.cwd().replace(/\\/g, '/')}/a.txt`
+  assert.equal(
+    untraceableParams({ path: underCwd }, emptyCorpus, ['path'], resolveSettings({ traceableRoots: [] }).traceableRoots).length,
+    1,
+  )
+})
+
+test('a Chinese mode label is not reported as an unknown profile', () => {
+  assert.deepEqual(resolveSettings({ mode: '断案' }).warnings, [])
+  assert.equal(resolveSettings({ mode: '断案' }).mode, 'adjudicate')
+})

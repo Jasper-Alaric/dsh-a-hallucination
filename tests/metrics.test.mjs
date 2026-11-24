@@ -8,7 +8,7 @@ function cleanDoc() {
   return {
     answer: 'value is 42',
     claims: [{ id: 'C1', claim: 'value is 42', status: 'verified', evidence_ids: ['E1'] }],
-    evidence: [{ id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: '', verbatim: false }],
+    evidence: [{ id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: 'body', verbatim: true }],
     facts: ['value is 42'],
     tool_calls: [{ tool: 'read', status: 'success' }],
   }

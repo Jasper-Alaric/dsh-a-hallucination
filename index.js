@@ -11,9 +11,11 @@
  * running.
  */
 
+import { createApprovalRegistry } from './lib/approvals.js'
+import { confirmationOf } from './lib/confirm.js'
 import { buildContract, contractDigest, contractEnabled } from './lib/contract.js'
 import { createCorpusRegistry, textOfContent } from './lib/corpus.js'
-import { createObservationRegistry, decidePreTool, SELF_TOOLS } from './lib/gate.js'
+import { createObservationRegistry, decidePreTool, IDENTIFYING_KEYS, SELF_TOOLS } from './lib/gate.js'
 import { registerHttp } from './lib/http.js'
 import { createLedgerRegistry } from './lib/ledger.js'
 import { modeLabel, resolveSettings, switchesOf } from './lib/modes.js'
@@ -67,7 +69,7 @@ function createService(state) {
     /**
      * Current status snapshot.
      *
-     * @returns mode, switches, contract digest, totals, and degraded capabilities.
+     * @returns mode, switches, contract digest, session metrics, totals, and degraded capabilities.
      */
     status() {
       // Rendered with every registered tool, which is what this plugin can
@@ -83,6 +85,11 @@ function createService(state) {
         contractChars: text.length,
         contractSha1: contractDigest(text),
         startedAt: new Date(state.startedAt).toISOString(),
+        session: {
+          startedAt: new Date(state.startedAt).toISOString(),
+          uptimeMs: Date.now() - state.startedAt,
+          metrics: state.metrics !== undefined ? state.metrics.snapshot() : null,
+        },
         ledgerEntries: state.ledgers.total(),
         observations: state.observations.total(),
         trackedTurns: state.turns.sessions(),
@@ -191,6 +198,23 @@ function registerEvents(ctx, state, log) {
   }
 
   try {
+    ctx.on('session/event', (session, event) => {
+      try {
+        if (session === null || typeof session !== 'object' || typeof session.id !== 'string') return
+        if (event === null || typeof event !== 'object') return
+        const data = event.data !== null && typeof event.data === 'object' ? event.data : {}
+        if (event.type === 'approval/asked') state.approvals.asked(session.id, data)
+        else if (event.type === 'approval/decided') state.approvals.decided(session.id, data)
+      } catch (error) {
+        log.warn('approval audit capture failed', error)
+      }
+    })
+  } catch (error) {
+    state.degraded.push('events')
+    log.error('could not register the approval audit observer', error)
+  }
+
+  try {
     ctx.on('agent/pre-step', (payload, next) => {
       try {
         captureStep(payload, state)
@@ -276,7 +300,7 @@ function registerEvents(ctx, state, log) {
         const turn = Number.isFinite(payload?.turn) ? payload.turn : state.turns.turnOf(sessionId)
         const text = state.turns.textOf(sessionId)
         const entries = state.ledgers.get(sessionId).list().filter(entry => turn === null || entry.turn === turn)
-        const result = verifyTurn(text, entries)
+        const result = verifyTurn(text, entries, confirmationOf(state, sessionId, turn, entries))
         state.verdicts.set(sessionId, {
           turn,
           at: new Date().toISOString(),
@@ -304,6 +328,8 @@ function registerEvents(ctx, state, log) {
         state.ledgers.drop(session.id)
         state.corpora.drop(session.id)
         state.observations.drop(session.id)
+        state.confirmations.drop(session.id)
+        state.approvals.drop(session.id)
         state.turns.drop(session.id)
         state.verdicts.drop(session.id)
       } catch (error) {
@@ -339,9 +365,15 @@ export function apply(ctx, config) {
       ctx,
       persistDir,
       metrics: createMetrics(),
-      ledgers: createLedgerRegistry(),
+      ledgers: createLedgerRegistry({
+        // The pre-dispatch gate checks configured extra keys, so the ledger must
+        // retain them for V9 to apply the same list.
+        identifyingKeys: [...new Set([...IDENTIFYING_KEYS, ...settings.traceableParams])],
+      }),
       corpora: createCorpusRegistry(),
       observations: createObservationRegistry(),
+      confirmations: createObservationRegistry(),
+      approvals: createApprovalRegistry(),
       marks: createMarkRegistry(),
       turns: createTurnTracker(),
       verdicts: createVerdictRegistry(),

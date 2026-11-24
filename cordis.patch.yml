@@ -1,6 +1,4 @@
 # A-Hallucination bundle patch: one Host row.
-# `mode` is one of observe | inspect | adjudicate; the default is inspect (明察).
-# `persistMode` defaults to on and keeps the user's choice across restarts.
 - insert:
     - id: a-hallucination
       name: '@jasper_alaric/dsh-a-hallucination'

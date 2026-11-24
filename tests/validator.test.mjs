@@ -190,7 +190,7 @@ test('V4 rejects a source_type the runtime cannot vouch for', () => {
 })
 
 test('V10 downgrades on any failure and never passes', () => {
-  const result = validateAnswer({ answer: '已确认。', claims: [], evidence: [], tool_calls: [] }, {})
+  const result = validateAnswer({ answer: '已执行。', claims: [], evidence: [], tool_calls: [] }, {})
   assert.equal(result.passed, false)
   assert.equal(result.verdict, 'downgrade')
   assert.equal(result.downgradeTo, 'abstain')
@@ -286,11 +286,74 @@ test('checks run when their inputs are supplied', () => {
   assert.equal(result.unchecked.includes('V9'), false)
 })
 
+// --- V1 coverage, V3 quotes, and completion tense ---------------------------
+
+test('V3 fails a verified claim that supplies no quote', () => {
+  const doc = compliant()
+  doc.evidence[0].excerpt = ''
+  doc.evidence[0].verbatim = false
+  const result = validateAnswer(doc, context())
+  assert.equal(result.passed, false)
+  assert.ok(result.failedCodes.includes('V3'))
+  assert.ok(result.failures.some(failure => failure.code === 'V3' && failure.message.includes('no quote')))
+})
+
+test('V3 passes a verified claim with a correct quote', () => {
+  assert.equal(validateAnswer(compliant(), context()).passed, true)
+})
+
+test('a short 0.4 substring no longer covers a numbered fact', () => {
+  const doc = compliant({ facts: ['服务器返回 500 错误'] })
+  doc.claims = [{ id: 'C1', claim: '服务器返回', status: 'inferred', evidence_ids: [], confidence: 'medium' }]
+  assert.ok(validateAnswer(doc, context()).failedCodes.includes('V1'))
+})
+
+test('a claim that contains the whole fact still covers it', () => {
+  const doc = compliant({ facts: ['服务器返回 500 错误'] })
+  doc.claims = [{ id: 'C1', claim: '服务器返回 500 错误', status: 'inferred', evidence_ids: [], confidence: 'medium' }]
+  assert.equal(validateAnswer(doc, context()).failedCodes.includes('V1'), false)
+})
+
+test('a bare 已完成 in reasoning does not trip V5', () => {
+  const doc = compliant({ answer: '分析已完成，结论如下。', tool_calls: [] })
+  const result = validateAnswer(doc, context())
+  assert.equal(result.failedCodes.includes('V5'), false)
+  assert.equal(result.passed, true)
+})
+
+test('a bare 已确认 in reasoning does not trip V5', () => {
+  const doc = compliant({ answer: '已确认这条推理自洽。', tool_calls: [] })
+  const result = validateAnswer(doc, context())
+  assert.equal(result.failedCodes.includes('V5'), false)
+  assert.equal(result.passed, true)
+})
+
+test('a bare 已删除 still needs a successful call', () => {
+  const result = validateAnswer({ answer: '文件已删除。', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.equal(result.passed, false)
+  assert.ok(result.failedCodes.includes('V5'))
+})
+
+// --- L2 timestamp zone and L5 strict level ---------------------------------
+
+test('V11 rejects a timestamp without a zone', () => {
+  const result = validateAnswer(freshDoc('2026-11-24T08:00:00'), CTX)
+  assert.ok(result.failedCodes.includes('V11'))
+})
+
+test('strict requires a verbatim quote, not only an evidence id', () => {
+  const doc = freshDoc(new Date().toISOString())
+  doc.claims[0].time_sensitive = false
+  doc.evidence[0].excerpt = ''
+  doc.evidence[0].verbatim = false
+  assert.equal(validateAnswer(doc, CTX).stats.level, 'standard')
+})
+
 // --- V11: time-sensitive claims need fresh evidence -------------------------
 
 /** A document that passes every other invariant, for V11 isolation. */
 function freshDoc(asOf) {
-  const evidence = { id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: '', verbatim: false }
+  const evidence = { id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: 'body', verbatim: true }
   if (asOf !== undefined) evidence.as_of = asOf
   return {
     answer: 'value is 42',
@@ -359,4 +422,64 @@ test('the rendered verdict names the output form for a failure', () => {
 test('the rendered verdict names the output form for a pass', () => {
   const text = formatVerdict(validateAnswer(freshDoc(new Date().toISOString()), CTX))
   assert.ok(text.includes('form: direct') || text.includes('form: annotate'), text)
+})
+
+// --- a failed check must never also be reported as "not checked" ------------
+
+test('a failed check is never listed as unchecked', () => {
+  const doc = {
+    answer: 'value is 42',
+    claims: [{ id: 'C1', claim: 'value is 42', status: 'verified', evidence_ids: ['E1'] }],
+    evidence: [{ id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: 'value is 42', verbatim: true }],
+    facts: ['value is 42'],
+    tool_calls: [{ tool: 'read', status: 'success' }],
+  }
+  // The quote is absent, so V3 fails; V3 must not appear in unchecked as well.
+  const result = validateAnswer(doc, { toolNames: ['read'], sources: { E1: 'other body' }, traceable: [] })
+  assert.ok(result.failedCodes.includes('V3'), JSON.stringify(result.failedCodes))
+  assert.equal(result.unchecked.includes('V3'), false, JSON.stringify(result.unchecked))
+})
+
+test('unchecked still reports V3 when nothing quoted anything at all', () => {
+  const doc = {
+    answer: 'ok',
+    claims: [{ id: 'C1', claim: 'ok', status: 'inferred' }],
+    evidence: [],
+    facts: ['ok'],
+    tool_calls: [{ tool: 'read', status: 'success' }],
+  }
+  const result = validateAnswer(doc, { toolNames: ['read'], sources: { E1: 'body' }, traceable: [] })
+  assert.equal(result.unchecked.includes('V3'), true, JSON.stringify(result.unchecked))
+})
+
+// --- H2 regression: 已确认 must still name a completed execution -------------
+
+test('已确认删除 is a completed deletion claim', () => {
+  const result = validateAnswer({ answer: '文件已确认删除。', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.ok(result.failedCodes.includes('V5'))
+})
+
+test('已确认发布 is a completed publish claim', () => {
+  const result = validateAnswer({ answer: '版本已确认发布。', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.ok(result.failedCodes.includes('V5'))
+})
+
+test('已确认支付 is a completed payment claim', () => {
+  const result = validateAnswer({ answer: '订单已确认支付。', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.ok(result.failedCodes.includes('V5'))
+  assert.ok(result.failedCodes.includes('V6'))
+})
+
+// --- N4: the English completion vocabulary the README promises ---------------
+
+test('already published is completion tense', () => {
+  const result = validateAnswer({ answer: 'I already published the package.', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.ok(result.failedCodes.includes('V5'))
+})
+
+// --- N8: negation is decided per clause, not per sentence --------------------
+
+test('a comma clause does not negate the completed clause', () => {
+  const result = validateAnswer({ answer: '已删除文件，未删除备份。', claims: [], evidence: [], tool_calls: [] }, {})
+  assert.ok(result.failedCodes.includes('V5'))
 })

@@ -26,7 +26,7 @@
 
 ## 它能查什么、查不了什么
 
-**机械可查**：证据引用的工具是否真的跑过；逐字摘录是否真在它引用那份原文里；完成时态有没有对应的成功调用；高风险动作是否未经确认就执行了；参数有没有可见出处；时效断言引的证据是否还在期限內。这些就是 `lib/validator.js` 里的 V1–V11，每次核验都会点名它**没查成**的那几项。
+**机械可查**：证据引用的工具是否真的跑过；逐字摘录是否真在它引用那份原文里；完成时态有没有对应的成功调用；高风险动作执行时，本轮是否有对应的批准记录（运行时把人工决定记成 `approval/asked` + `approval/decided` 审计对）；参数能不能在本轮观察语料（用户文本 + 成功工具输出）里找到出处；时效断言引的证据是否还在期限內。V8 对比的是 gate 在同一轮记下的高风险询问、运行时记录的人工决定与真实执行，V9 对比的是本会话语料快照。这些就是 `lib/validator.js` 里的 V1–V11，每次核验都会点名它**没查成**的那几项。
 
 **查不了**：断言本身是不是真的。**这个插件管的是证据纪律，不是事实真值。** 输入不足时（没有结构化断言、没有原文），它会把这些项标成 `unchecked`、结论给 `partial`，而不是假装通过。
 
@@ -35,6 +35,9 @@
 ```sh
 dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 ```
+
+本仓库里的是本地开发副本：`package.json` 里名字是 `@local/dsh-a-hallucination` 且 `private: true`，
+上面的安装命令指向发布后的包名，不是本地目录。
 
 首次安装后重启一次 Web GUI，设置页才会出现。
 
@@ -46,10 +49,16 @@ dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 | `promptLocale` | `zh` | 注入契约的语言（`zh` / `en`）。 |
 | `persistMode` | `true` | 重启后记住你选的档位；设为 `false` 得到无状态实例。 |
 | `stateDir` | `$DSH_HOME/a_hallucination` | 档位存放目录。 |
+| `contractOrder` | `240` | 契约提示段的排序位置。 |
+| `maxRewrite` | `2` | 解析重写预算（0–5）；不实现自动重写循环。 |
+| `maxRetry` | `2` | 契约要求模型遵守的重试次数（1–5）。 |
+| `maxEvidenceAgeHours` | `24` | 时效断言所引证据的年龄上限（小时）。 |
 | `highRiskTools` | `[]` | 额外需要确认的工具名。 |
 | `highRiskAllow` | `[]` | 豁免高风险门的工具名。 |
 | `untrustedTools` | `[]` | 额外要标记为外部数据的工具。 |
+| `untrustedToolsReplace` | `false` | 用配置列表替换内置外部工具表，而不是追加。 |
 | `traceableParams` | `[]` | 额外参与溯源检查的参数名。 |
+| `traceableRoots` | `cwd` + `$DSH_HOME` | 无需语料出处即可放行的路径根；显式 `[]` 表示不豁免任何路径。 |
 
 ## 工具
 
@@ -57,7 +66,7 @@ dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 
 `ledger_view`（只读）：`status` 状态（含运行指标：核验了几次、通过几次、引文比例）、`list` 最近调用、`observations` 无出处参数、`verdict` 上一轮轮末审计结论。
 
-每次核验还会报告**验证档位**（轻 / 标准 / 严格）和**输出形态**（直接输出 / 标注 / 弃权），把「查得多深」和「该怎么答」一起交代清楚。
+每次核验还会报告**验证档位**（轻 / 标准 / 严格）和**输出形态**（直接输出 / 标注 / 弃权），把「查得多深」和「该怎么答」一起交代清楚。**严格**要求真的引用了逐字原文（或做了时效断言），只挂证据编号不算。
 
 ## 隐私
 
@@ -66,5 +75,7 @@ dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 ## 已知局限
 
 - 轮末审计只核对完成时态，不核对任意断言；没有结构化断言时多数不变式只能报 `unchecked`。
+- V8 依赖运行时记录 `approval/asked` + `approval/decided` 审计对。若某个部署不记录这对事件，
+  插件会把每次询问都当作未确认，此时即便人工批准过，V8 仍会报失败。
 - **没有自动重写**：运行时无法往正在收尾的轮次追加消息，所以审计失败只报告、不强制。
 - 设置页显示的字数是按全量工具渲染的；某次请求实际装配时工具集可能更小。

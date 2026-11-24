@@ -32,8 +32,13 @@ agrees — and it says plainly which checks it can and cannot perform.
 
 Checked mechanically: evidence cites a tool that really ran; a verbatim excerpt
 matches the source it cites; completion language has a successful call behind it;
-a high-risk action was not executed without confirmation; a parameter has a
-visible origin; a time-sensitive claim cites evidence inside the age limit. These
+a high-risk action that ran has an observed approval decision behind it (the
+runtime's `approval/asked` + `approval/decided` audit pair); an identifying
+parameter traces back to the observed session corpus; a time-sensitive
+claim cites evidence inside the age limit. V9 compares parameters against the
+session corpus snapshot (user text plus successful tool output), and V8 compares
+executions against the high-risk asks the gate recorded in the same turn plus the
+approval outcome the runtime logged for them. These
 are the invariants V1–V11 in `lib/validator.js`, and every verdict names the ones
 it could not run.
 
@@ -48,6 +53,10 @@ returning a clean pass.
 dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 ```
 
+The package in this checkout is the local development copy: its manifest name is
+`@local/dsh-a-hallucination` with `private: true`, so the install command above
+targets the published name, not the local folder.
+
 Restart the Web GUI after the first install so the settings page is picked up.
 
 ## Configuration
@@ -58,10 +67,16 @@ Restart the Web GUI after the first install so the settings page is picked up.
 | `promptLocale` | `zh` | Language of the injected contract (`zh` or `en`). |
 | `persistMode` | `true` | Keep the selected profile across restarts; set `false` for an ephemeral instance. |
 | `stateDir` | `$DSH_HOME/a_hallucination` | Where the chosen profile is stored. |
+| `contractOrder` | `240` | Sort order of the contract prompt section. |
+| `maxRewrite` | `2` | Parsed rewrite budget (0–5); no automatic rewrite loop is implemented. |
+| `maxRetry` | `2` | Retry count the contract tells the model to respect (1–5). |
+| `maxEvidenceAgeHours` | `24` | Age limit for evidence cited by a time-sensitive claim. |
 | `highRiskTools` | `[]` | Extra tool names that need confirmation. |
 | `highRiskAllow` | `[]` | Tool names exempted from the risk gate. |
 | `untrustedTools` | `[]` | Extra tools whose output is marked as external data. |
+| `untrustedToolsReplace` | `false` | Replace the built-in external-tool list instead of extending it. |
 | `traceableParams` | `[]` | Extra parameter keys checked for provenance. |
+| `traceableRoots` | cwd + `$DSH_HOME` | Paths exempt from the provenance gate without a corpus citation. An explicit `[]` exempts nothing. |
 
 ## Tools
 
@@ -72,7 +87,8 @@ fails even when a tool call did happen this turn. Mark time-sensitive claims
 (price, incumbent, version, "current") with `as_of: true`; evidence older than
 `maxEvidenceAgeHours` (default 24) fails. Every verdict also states the **level**
 it applied (`light` / `standard` / `strict`) and the **form** the answer should
-take (direct / annotate / abstain).
+take (direct / annotate / abstain). `strict` requires a real verbatim quote (or a
+time-sensitive claim), not merely an evidence id.
 
 `ledger_view` — read-only: `status` (profile, switches, totals, and running
 metrics: verifications, pass rate, quote rate), `list` (recent dispatches),
@@ -90,6 +106,9 @@ anywhere.
 
 - Turn-end verification audits completion language, not arbitrary claims; without
   structured claims most invariants report `unchecked`.
+- V8 depends on the runtime logging the approval audit pair (`approval/asked` +
+  `approval/decided`). A deployment that never logs them reports every ask as
+  unconfirmed, so an approved call still fails V8 until a decision is observed.
 - No automatic rewrite loop: the runtime cannot append to a closing turn, so a
   failing audit is reported, never enforced.
 - The contract's character count shown in the settings page is rendered against

@@ -288,6 +288,10 @@ test('without persistence the mode resets to the configured default', () => {
 
 test('answer_verify passes an answer whose claim quotes the ledger', async () => {
   const host = start()
+  await host.emit('agent/pre-step', {
+    agent: { id: 's1' },
+    messages: [{ content: [{ type: 'text', text: '请读取 E:/a.txt' }] }],
+  }, async () => ({ kind: 'enter', messages: [] }))
   await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result('ServerTime=08:00:12'))
   const tool = host.tool('answer_verify')
   const value = await tool.execute({
@@ -344,4 +348,177 @@ test('answer_verify reports how many claims carried a quote', async () => {
   }, call('answer_verify'))
   assert.equal(value.quoted, 0)
   assert.equal(value.unquoted, 2)
+})
+
+test('an inferred claim does not need uncertainty wording', async () => {
+  const host = start()
+  const value = await host.tool('answer_verify').execute({
+    answer: '项目大概率按期交付。',
+    claims: [{ claim: '项目大概率按期交付', status: 'inferred' }],
+  }, call('answer_verify'))
+  assert.equal(value.failedCodes.includes('V7'), false)
+})
+
+test('a quote beyond the display cap is still verified', async () => {
+  const host = start()
+  const body = `E:/a.txt ${'a'.repeat(1800)}TAIL_MARKER`
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result(body))
+  const value = await host.tool('answer_verify').execute({
+    answer: '定位到 TAIL_MARKER。',
+    claims: [{ claim: '定位到 TAIL_MARKER', status: 'verified', evidence_id: 'E1', quote: 'TAIL_MARKER' }],
+  }, call('answer_verify'))
+  assert.equal(value.passed, true)
+})
+
+test('an over-limit quote names the covered range', async () => {
+  const host = start()
+  const body = `E:/a.txt ${'a'.repeat(9000)}TAIL_MARKER`
+  await host.emit('tools/result', call('read', { path: 'E:/a.txt' }), result(body))
+  const value = await host.tool('answer_verify').execute({
+    answer: '定位到 TAIL_MARKER。',
+    claims: [{ claim: '定位到 TAIL_MARKER', status: 'verified', evidence_id: 'E1', quote: 'TAIL_MARKER' }],
+  }, call('answer_verify'))
+  const failure = value.failures.find(item => item.code === 'V3')
+  assert.notEqual(failure, undefined)
+  assert.ok(failure.message.includes('8000'), failure.message)
+  assert.ok(failure.message.includes('9020'), failure.message)
+})
+
+test('an unconfirmed high-risk ask that executed fails V8', async () => {
+  const host = start()
+  const exec = call('deleteFile', { path: 'E:/x.txt' }, 'call_del')
+  const decision = await host.emit('tools/pre-execute', exec, async () => ({ kind: 'allow' }))
+  assert.equal(decision.kind, 'ask')
+  await host.emit('tools/result', exec, result('deleted E:/x.txt'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '已删除文件。',
+    claims: [{ claim: '文件已删除', status: 'unknown' }],
+  }, call('answer_verify'))
+  assert.ok(value.failedCodes.includes('V8'))
+})
+
+test('a silent successful call satisfies completion tense', async () => {
+  const host = start()
+  await host.emit('tools/result', call('pwsh', { command: 'New-Item x' }), result('   '))
+  const value = await host.tool('answer_verify').execute({
+    answer: '已执行清理。',
+    claims: [],
+  }, call('answer_verify'))
+  assert.equal(value.failedCodes.includes('V5'), false)
+  assert.equal(value.failedCodes.includes('V6'), false)
+})
+
+test('a parameter absent from the corpus fails V9', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read', { path: 'E:/secret/key.txt' }), result('body'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '结果如下。',
+    claims: [],
+  }, call('answer_verify'))
+  assert.ok(value.failedCodes.includes('V9'))
+})
+
+// --- N1: one ledger entry, several claims, each with its own quote -----------
+
+test('a shared ledger entry cannot lend its quote to an unquoted claim', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read'), result('ServerTime=08:00:12; Host=web-1'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '时间 08:00:12，主机 web-1。',
+    claims: [
+      { claim: '时间 08:00:12', status: 'verified', evidence_id: 'E1', quote: '08:00:12' },
+      { claim: '主机 web-1', status: 'verified', evidence_id: 'E1' },
+    ],
+  }, call('answer_verify'))
+  assert.equal(value.passed, false)
+  const v3 = value.failures.filter(failure => failure.code === 'V3')
+  assert.equal(v3.length, 1, JSON.stringify(value.failures))
+  assert.equal(v3[0].detail, 'C2')
+  assert.ok(v3[0].message.includes('no quote'), v3[0].message)
+})
+
+test('an earlier unquoted claim is not laundered by a later quote on the same entry', async () => {
+  const host = start()
+  await host.emit('tools/result', call('read'), result('ServerTime=08:00:12; Host=web-1'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '时间 08:00:12，主机 web-1。',
+    claims: [
+      { claim: '时间 08:00:12', status: 'verified', evidence_id: 'E1' },
+      { claim: '主机 web-1', status: 'verified', evidence_id: 'E1', quote: 'web-1' },
+    ],
+  }, call('answer_verify'))
+  assert.equal(value.passed, false)
+  const v3 = value.failures.filter(failure => failure.code === 'V3')
+  assert.equal(v3.length, 1, JSON.stringify(value.failures))
+  assert.equal(v3[0].detail, 'C1')
+})
+
+// --- N2: approval/asked + approval/decided are the observable decision ------
+
+/** Publish one real approval audit pair for a call. */
+async function approval(host, requestId, callId, outcome) {
+  await host.emit('session/event', { id: 's1' }, { seq: 1, time: Date.now(), type: 'approval/asked', data: { id: requestId, toolName: 'delete', callId } })
+  if (outcome === undefined) return
+  await host.emit('session/event', { id: 's1' }, { seq: 2, time: Date.now(), type: 'approval/decided', data: { id: requestId, outcome } })
+}
+
+test('an observed allowed-once decision clears V8', async () => {
+  const host = start()
+  const exec = call('delete', {}, 'call_del_ok')
+  const decision = await host.emit('tools/pre-execute', exec, async () => ({ kind: 'allow' }))
+  assert.equal(decision.kind, 'ask')
+  await approval(host, 'req_ok', 'call_del_ok', 'allowed-once')
+  await host.emit('tools/result', exec, result('deleted'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '文件已删除。',
+    claims: [{ claim: '文件已删除', status: 'inferred' }],
+  }, call('answer_verify'))
+  assert.equal(value.passed, true, JSON.stringify(value.failures))
+  assert.equal(value.failedCodes.includes('V8'), false)
+})
+
+test('an ask with no observed decision still fails V8', async () => {
+  const host = start()
+  const exec = call('delete', {}, 'call_del_pending')
+  await host.emit('tools/pre-execute', exec, async () => ({ kind: 'allow' }))
+  await approval(host, 'req_pending', 'call_del_pending', undefined)
+  await host.emit('tools/result', exec, result('deleted'))
+  const value = await host.tool('answer_verify').execute({
+    answer: '文件已删除。',
+    claims: [{ claim: '文件已删除', status: 'inferred' }],
+  }, call('answer_verify'))
+  assert.ok(value.failedCodes.includes('V8'), JSON.stringify(value.failures))
+})
+
+test('turn-end audit sees the same approval record', async () => {
+  const host = start()
+  const stream = frame => host.emit('agent/assistant-stream', { agent: { id: 's1' }, frame })
+  await stream({ type: 'start', turn: 4 })
+  const exec = call('delete', {}, 'call_del_turn')
+  await host.emit('tools/pre-execute', exec, async () => ({ kind: 'allow' }))
+  await approval(host, 'req_turn', 'call_del_turn', 'allowed-once')
+  await host.emit('tools/result', exec, result('deleted'))
+  await stream({ type: 'chunk', chunk: { type: 'text-delta', text: '文件已删除。' } })
+  await host.emit('agent/turn-stopping', { agent: { id: 's1' }, turn: 4 })
+  const verdict = await host.tool('ledger_view').execute({ action: 'verdict' }, call('ledger_view'))
+  assert.equal(verdict.verdict.passed, true, JSON.stringify(verdict.verdict))
+  assert.equal(verdict.verdict.failedCodes.includes('V8'), false)
+})
+
+// --- N6: configured traceableParams reach the ledger, so V9 sees them -------
+
+test('a configured traceable param reaches V9 through the ledger', async () => {
+  const host = start({ plugin: { traceableParams: ['cmdline'] } })
+  await host.emit('tools/result', call('run', { cmdline: 'novel-value' }, 'call_run'), result('ok'))
+  const value = await host.tool('answer_verify').execute({ answer: '结果如下。', claims: [] }, call('answer_verify'))
+  const v9 = value.failures.filter(failure => failure.code === 'V9')
+  assert.ok(v9.length > 0, JSON.stringify(value.failures))
+  assert.ok(v9.some(failure => failure.message.includes('novel-value')), JSON.stringify(v9))
+})
+
+test('without the configuration the same param is not retained', async () => {
+  const host = start()
+  await host.emit('tools/result', call('run', { cmdline: 'novel-value' }, 'call_run'), result('ok'))
+  const value = await host.tool('answer_verify').execute({ answer: '结果如下。', claims: [] }, call('answer_verify'))
+  assert.equal(value.failedCodes.includes('V9'), false)
 })

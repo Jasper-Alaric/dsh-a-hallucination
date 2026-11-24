@@ -54,6 +54,12 @@ test('a completion with a successful execution call passes that check', () => {
   assert.equal(result.failedCodes.includes('V6'), false)
 })
 
+test('a silent success with status empty still counts as executed', () => {
+  const result = verifyTurn('已执行清理。', [entry({ status: 'empty', ok: true })])
+  assert.equal(result.failedCodes.includes('V5'), false)
+  assert.equal(result.failedCodes.includes('V6'), false)
+})
+
 test('an empty answer yields a partial verdict, never a clean pass', () => {
   const result = verifyTurn('', [])
   assert.equal(result.verdict, 'partial')
