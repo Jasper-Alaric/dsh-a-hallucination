@@ -334,3 +334,29 @@ test('stale evidence is fine for a claim that is not time-sensitive', () => {
 test('V11 is declared with the other invariants', () => {
   assert.ok(INVARIANTS.some(item => item.code === 'V11'))
 })
+
+// --- L3 verification level and L6 output form -------------------------------
+
+test('a quoted claim raises the level to strict', () => {
+  assert.equal(validateAnswer(freshDoc(new Date().toISOString()), CTX).stats.level, 'strict')
+})
+
+test('a successful call without quotes is standard', () => {
+  const doc = { answer: 'ok', claims: [{ id: 'C1', claim: 'ok', status: 'inferred' }], facts: ['ok'], tool_calls: [{ tool: 'read', status: 'success' }] }
+  assert.equal(validateAnswer(doc, {}).stats.level, 'standard')
+})
+
+test('no call at all is a light pass', () => {
+  const doc = { answer: 'ok', claims: [{ id: 'C1', claim: 'ok', status: 'inferred' }], facts: ['ok'], tool_calls: [] }
+  assert.equal(validateAnswer(doc, {}).stats.level, 'light')
+})
+
+test('the rendered verdict names the output form for a failure', () => {
+  const text = formatVerdict(validateAnswer(freshDoc(undefined), CTX))
+  assert.ok(text.includes('form: abstain'), text)
+})
+
+test('the rendered verdict names the output form for a pass', () => {
+  const text = formatVerdict(validateAnswer(freshDoc(new Date().toISOString()), CTX))
+  assert.ok(text.includes('form: direct') || text.includes('form: annotate'), text)
+})

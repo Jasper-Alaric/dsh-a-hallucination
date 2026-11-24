@@ -1,8 +1,8 @@
 {
   "name": "@jasper_alaric/dsh-a-hallucination",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "type": "module",
-  "description": "Runtime evidence discipline for DeepSeek Harness: a bounded anti-hallucination contract, a ledger built only from real tool dispatches, gates for untraceable targets and high-risk actions, untrusted-content marking, and a turn-end completion audit.",
+  "description": "Runtime evidence discipline for DeepSeek Harness: a bounded anti-hallucination contract, a ledger built only from real tool dispatches, gates for untraceable targets and high-risk actions, untrusted-content marking, per-answer verification with levels and output-form governance, and running verifier metrics.",
   "keywords": [
     "dsh",
     "dsh-plugin",

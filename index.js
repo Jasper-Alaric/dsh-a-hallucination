@@ -19,6 +19,7 @@ import { createLedgerRegistry } from './lib/ledger.js'
 import { modeLabel, resolveSettings, switchesOf } from './lib/modes.js'
 import { createMarkRegistry, isExternal, markContent } from './lib/shield.js'
 import { loadMode, resolveStateDir, saveMode } from './lib/state.js'
+import { createMetrics } from './lib/metrics.js'
 import { registerTools } from './lib/tools.js'
 import { createTurnTracker, createVerdictRegistry } from './lib/turn.js'
 import { verifyTurn } from './lib/turnend.js'
@@ -337,6 +338,7 @@ export function apply(ctx, config) {
       startedAt: Date.now(),
       ctx,
       persistDir,
+      metrics: createMetrics(),
       ledgers: createLedgerRegistry(),
       corpora: createCorpusRegistry(),
       observations: createObservationRegistry(),

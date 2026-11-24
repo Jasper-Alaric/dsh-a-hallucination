@@ -88,7 +88,7 @@ test('the description does not promise behaviour the code lacks', () => {
   for (const promise of ['rewrite', 'automatically fixes', 'self-heals']) {
     assert.equal(manifest.description.includes(promise), false, `description promises ${promise}`)
   }
-  for (const present of ['ledger', 'contract', 'turn-end']) {
+  for (const present of ['ledger', 'contract', 'verification']) {
     assert.ok(manifest.description.includes(present), `description omits ${present}`)
   }
 })

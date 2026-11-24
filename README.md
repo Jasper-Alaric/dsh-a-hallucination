@@ -33,7 +33,9 @@ agrees — and it says plainly which checks it can and cannot perform.
 Checked mechanically: evidence cites a tool that really ran; a verbatim excerpt
 matches the source it cites; completion language has a successful call behind it;
 a high-risk action was not executed without confirmation; a parameter has a
-visible origin.
+visible origin; a time-sensitive claim cites evidence inside the age limit. These
+are the invariants V1–V11 in `lib/validator.js`, and every verdict names the ones
+it could not run.
 
 **Not checked:** whether a claim is *true*. This plugin governs evidence
 discipline, not truth. Where an input is missing — no structured claims, no source
@@ -63,16 +65,19 @@ Restart the Web GUI after the first install so the settings page is picked up.
 
 ## Tools
 
-`answer_verify` — submit the answer you are about to send, one claim per factual
-assertion, each citing a ledger entry id and the exact quoted substring. The
-verifier compares each quote against that entry's stored result, so a fabricated
-number fails even when a tool call did happen this turn. Mark time-sensitive
-claims (price, incumbent, version, "current") with `as_of: true`; evidence older
-than `maxEvidenceAgeHours` (default 24) fails.
+`answer_verify` — submit the answer you are about to send: one claim per factual
+assertion, each citing a ledger entry id and, when quoting, the exact substring.
+Quotes are compared against that entry's stored result, so a fabricated number
+fails even when a tool call did happen this turn. Mark time-sensitive claims
+(price, incumbent, version, "current") with `as_of: true`; evidence older than
+`maxEvidenceAgeHours` (default 24) fails. Every verdict also states the **level**
+it applied (`light` / `standard` / `strict`) and the **form** the answer should
+take (direct / annotate / abstain).
 
-`ledger_view` — read-only: `status` (profile, switches, totals), `list` (recent
-dispatches), `observations` (parameters with no visible origin), `verdict` (the
-last turn-end audit).
+`ledger_view` — read-only: `status` (profile, switches, totals, and running
+metrics: verifications, pass rate, quote rate), `list` (recent dispatches),
+`observations` (parameters with no visible origin), `verdict` (the last turn-end
+audit).
 
 ## Privacy
 
