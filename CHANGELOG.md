@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- New invariant V11: a claim marked time-sensitive (`as_of: true`) must cite
+  evidence whose `as_of` — the ledger entry's retrieval time — is no older than
+  `maxEvidenceAgeHours` (default 24). Stale or untimestamped evidence now fails
+  instead of silently passing, which is what a "current price / latest version"
+  answer needs.
+- `answer_verify` returns lossless JSON: a failure without a detail used to carry
+  an `undefined` field, which the tool boundary rejected.
+- 154 tests.
+
 ## 1.1.0
 
 - New `answer_verify` tool: submit the answer with one claim per factual

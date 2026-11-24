@@ -53,7 +53,7 @@ dsh plugin --profile web add @jasper_alaric/dsh-a-hallucination
 
 ## 工具
 
-`answer_verify` —— 把即将发出的回答交上来，每条事实断言一条 claim，附台账编号（E1、E2…）与**逐字原文引用**。核验器把引用和那条台账的真实结果做子串比对，所以哪怕本轮确实调用过工具，编造的数字也会因为引不到原文而失败。
+`answer_verify` —— 把即将发出的回答交上来，每条事实断言一条 claim，附台账编号（E1、E2…）与**逐字原文引用**。核验器把引用和那条台账的真实结果做子串比对，所以哪怕本轮确实调用过工具，编造的数字也会因为引不到原文而失败。时效性断言（价格、现任、版本、「目前/最新」）加 `as_of: true`，证据抓取时间超过 `maxEvidenceAgeHours`（默认 24 小时）会被判失败。
 
 `ledger_view`（只读）：`status` 状态、`list` 最近调用、`observations` 无出处参数、`verdict` 上一轮轮末审计结论。
 

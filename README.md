@@ -66,7 +66,9 @@ Restart the Web GUI after the first install so the settings page is picked up.
 `answer_verify` — submit the answer you are about to send, one claim per factual
 assertion, each citing a ledger entry id and the exact quoted substring. The
 verifier compares each quote against that entry's stored result, so a fabricated
-number fails even when a tool call did happen this turn.
+number fails even when a tool call did happen this turn. Mark time-sensitive
+claims (price, incumbent, version, "current") with `as_of: true`; evidence older
+than `maxEvidenceAgeHours` (default 24) fails.
 
 `ledger_view` — read-only: `status` (profile, switches, totals), `list` (recent
 dispatches), `observations` (parameters with no visible origin), `verdict` (the

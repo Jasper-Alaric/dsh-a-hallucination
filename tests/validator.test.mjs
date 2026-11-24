@@ -32,7 +32,7 @@ test('a compliant answer passes and names every invariant', () => {
   assert.equal(result.passed, true)
   assert.equal(result.verdict, 'pass')
   assert.equal(result.downgradeTo, null)
-  assert.equal(INVARIANTS.length, 10)
+  assert.equal(INVARIANTS.length, 11)
 })
 
 test('V1 catches a factual sentence with no claim', () => {
@@ -284,4 +284,53 @@ test('checks run when their inputs are supplied', () => {
   assert.equal(result.unchecked.includes('V1'), false)
   assert.equal(result.unchecked.includes('V3'), false)
   assert.equal(result.unchecked.includes('V9'), false)
+})
+
+// --- V11: time-sensitive claims need fresh evidence -------------------------
+
+/** A document that passes every other invariant, for V11 isolation. */
+function freshDoc(asOf) {
+  const evidence = { id: 'E1', source_type: 'tool', source: 'read', source_id: 'E1', excerpt: '', verbatim: false }
+  if (asOf !== undefined) evidence.as_of = asOf
+  return {
+    answer: 'value is 42',
+    claims: [{ id: 'C1', claim: 'value is 42', status: 'verified', evidence_ids: ['E1'], time_sensitive: true }],
+    evidence: [evidence],
+    facts: ['value is 42'],
+    tool_calls: [{ tool: 'read', status: 'success' }],
+  }
+}
+const CTX = { toolNames: ['read'], sources: { E1: 'body' }, traceable: [], maxAgeHours: 24 }
+
+test('V11 passes when the cited evidence was retrieved just now', () => {
+  const result = validateAnswer(freshDoc(new Date().toISOString()), CTX)
+  assert.equal(result.failedCodes.includes('V11'), false)
+})
+
+test('V11 fails a time-sensitive claim backed by stale evidence', () => {
+  const old = new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+  const result = validateAnswer(freshDoc(old), CTX)
+  assert.equal(result.passed, false)
+  assert.ok(result.failedCodes.includes('V11'))
+})
+
+test('V11 fails when the evidence carries no timestamp at all', () => {
+  const result = validateAnswer(freshDoc(undefined), CTX)
+  assert.ok(result.failedCodes.includes('V11'))
+})
+
+test('V11 respects a custom age limit', () => {
+  const twoHours = new Date(Date.now() - 2 * 3600 * 1000).toISOString()
+  assert.equal(validateAnswer(freshDoc(twoHours), { ...CTX, maxAgeHours: 1 }).failedCodes.includes('V11'), true)
+  assert.equal(validateAnswer(freshDoc(twoHours), { ...CTX, maxAgeHours: 24 }).failedCodes.includes('V11'), false)
+})
+
+test('stale evidence is fine for a claim that is not time-sensitive', () => {
+  const doc = freshDoc(new Date(Date.now() - 48 * 3600 * 1000).toISOString())
+  doc.claims[0].time_sensitive = false
+  assert.equal(validateAnswer(doc, CTX).failedCodes.includes('V11'), false)
+})
+
+test('V11 is declared with the other invariants', () => {
+  assert.ok(INVARIANTS.some(item => item.code === 'V11'))
 })
