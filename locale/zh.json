@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "A-Hallucination",
+    "description": "运行时证据纪律：常驻反幻觉契约、只由真实工具派发构建的证据台账、标识参数与高风险动作前置门，以及外部内容不可信标记。"
+  },
+  "modes": {
+    "observe": "静观",
+    "inspect": "明察",
+    "adjudicate": "断案"
+  }
+}

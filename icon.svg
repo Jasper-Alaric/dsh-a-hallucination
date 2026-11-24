@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="A-Hallucination">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a41"/>
+      <stop offset="1" stop-color="#0d1520"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ce0ff"/>
+      <stop offset="1" stop-color="#2f9fd0"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="22" fill="url(#bg)"/>
+  <path d="M48 14 72 23v22c0 15-10 26-24 32-14-6-24-17-24-32V23z" fill="none" stroke="url(#edge)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M37 47l8 8 15-16" fill="none" stroke="#eaf7ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

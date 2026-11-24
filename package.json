@@ -1,0 +1,66 @@
+{
+  "name": "@jasper_alaric/dsh-a-hallucination",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Runtime evidence discipline for DeepSeek Harness: a bounded anti-hallucination contract, a ledger built only from real tool dispatches, gates for untraceable targets and high-risk actions, untrusted-content marking, and a turn-end completion audit.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "anti-hallucination",
+    "evidence",
+    "verification",
+    "grounding"
+  ],
+  "license": "MIT",
+  "author": "Jasper Alaric",
+  "icon": "docs/icon.png",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "screenshots.json",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/*.png"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jasper-Alaric/dsh-a-hallucination.git"
+  },
+  "homepage": "https://github.com/Jasper-Alaric/dsh-a-hallucination#readme",
+  "bugs": {
+    "url": "https://github.com/Jasper-Alaric/dsh-a-hallucination/issues"
+  }
+}

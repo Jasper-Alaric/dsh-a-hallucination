@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "A-Hallucination",
+    "description": "Runtime evidence discipline: a bounded anti-hallucination contract, a ledger built only from real tool dispatches, gates for untraceable targets and high-risk actions, and untrusted-content marking."
+  },
+  "modes": {
+    "observe": "Observe",
+    "inspect": "Inspect",
+    "adjudicate": "Adjudicate"
+  }
+}
